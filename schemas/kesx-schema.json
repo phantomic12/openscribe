@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openscribe.dev/schemas/kesx-document.schema.json",
+  "title": "OpenScribe Document (KESX)",
+  "description": "Directory-based document format for literacy platform. JSON + page images + annotations.",
+  "type": "object",
+  "required": ["manifest", "pages"],
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "required": ["version", "title", "created"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "const": "1.0.0"
+        },
+        "title": {
+          "type": "string",
+          "description": "Document title"
+        },
+        "author": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "default": "en",
+          "description": "ISO 639-1 language code"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "modified": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "type": "object",
+          "description": "Original file this document was created from",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": ["pdf", "docx", "epub", "txt", "rtf", "html", "image", "scan"]
+            },
+            "filename": {
+              "type": "string"
+            },
+            "page_count": {
+              "type": "integer"
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "pages": {
+      "type": "array",
+      "description": "Ordered list of document pages",
+      "items": {
+        "$ref": "#/$defs/page"
+      }
+    },
+    "outline": {
+      "type": "array",
+      "description": "Document outline / table of contents",
+      "items": {
+        "$ref": "#/$defs/outlineItem"
+      }
+    },
+    "reading_state": {
+      "type": "object",
+      "description": "Per-user reading position and preferences (stored separately)",
+      "properties": {
+        "current_page": {"type": "integer"},
+        "current_word_index": {"type": "integer"},
+        "voice": {"type": "string"},
+        "speed_wpm": {"type": "integer", "minimum": 50, "maximum": 600},
+        "unit": {
+          "type": "string",
+          "enum": ["word", "line", "sentence", "paragraph"]
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["continuous", "self_paced", "word_by_word"]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "page": {
+      "type": "object",
+      "required": ["index", "image"],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "1-based page number"
+        },
+        "image": {
+          "type": "string",
+          "description": "Relative path to page image (PNG or JPEG)"
+        },
+        "dimensions": {
+          "type": "object",
+          "properties": {
+            "width": {"type": "integer"},
+            "height": {"type": "integer"}
+          }
+        },
+        "ocr": {
+          "type": "object",
+          "description": "OCR result for this page — text with word-level bounding boxes",
+          "properties": {
+            "engine": {"type": "string"},
+            "engine_version": {"type": "string"},
+            "language": {"type": "string"},
+            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            "blocks": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/textBlock"}
+            }
+          }
+        },
+        "annotations": {
+          "type": "array",
+          "description": "Highlights, notes, bookmarks on this page",
+          "items": {"$ref": "#/$defs/annotation"}
+        }
+      }
+    },
+    "textBlock": {
+      "type": "object",
+      "required": ["bbox", "lines"],
+      "properties": {
+        "bbox": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "[x1, y1, x2, y2] in page pixel coordinates"
+        },
+        "text": {
+          "type": "string",
+          "description": "Full text of the block (for search). Redundant with concatenating line texts."
+        },
+        "block_type": {
+          "type": "string",
+          "enum": ["paragraph", "heading", "list", "table", "image_caption", "header", "footer"]
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["bbox", "words"],
+            "properties": {
+              "bbox": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "words": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "bbox"],
+                  "properties": {
+                    "text": {"type": "string"},
+                    "bbox": {
+                      "type": "array",
+                      "items": {"type": "number"},
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "required": ["id", "type", "created"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "type": {
+          "type": "string",
+          "enum": ["highlight", "circle", "cross_out", "sticky_note", "text_note", "bubble_note", "voice_note", "bookmark"]
+        },
+        "created": {"type": "string", "format": "date-time"},
+        "modified": {"type": "string", "format": "date-time"},
+        "author": {"type": "string"},
+        "bbox": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "Bounding box of the annotated region on the page"
+        },
+        "highlight": {
+          "type": "object",
+          "description": "Properties for highlight-type annotations",
+          "properties": {
+            "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+            "label": {"type": "string", "description": "User-defined label for this color (e.g. 'Main Idea')"},
+            "column": {"type": "integer", "description": "Column assignment for Column Notes export"},
+            "prefix": {"type": "string", "description": "List prefix for Study Guide export"},
+            "indent": {"type": "integer", "description": "Indent level for Study Guide export"}
+          }
+        },
+        "note": {
+          "type": "object",
+          "description": "Properties for note-type annotations",
+          "properties": {
+            "text": {"type": "string"},
+            "color": {"type": "string"},
+            "question_type": {
+              "type": "string",
+              "enum": ["none", "multiple_choice", "true_false", "short_answer"]
+            },
+            "options": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Multiple choice options"
+            },
+            "correct_answer": {"type": "string"},
+            "image_url": {"type": "string", "description": "Optional image in bubble note"}
+          }
+        },
+        "voice_note": {
+          "type": "object",
+          "properties": {
+            "audio_path": {"type": "string"},
+            "duration_seconds": {"type": "number"},
+            "transcript": {"type": "string"}
+          }
+        }
+      }
+    },
+    "outlineItem": {
+      "type": "object",
+      "required": ["text", "level"],
+      "properties": {
+        "text": {"type": "string"},
+        "level": {"type": "integer", "minimum": 1},
+        "page": {"type": "integer"},
+        "children": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/outlineItem"}
+        }
+      }
+    }
+  }
+}

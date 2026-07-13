@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./models:/models
+    environment:
+      - DATABASE_URL=postgresql://openscribe:openscribe@db:5432/openscribe
+      - STORAGE_PATH=/data/documents
+      - MODELS_PATH=/models
+      - SECRET_KEY=change-me-in-production
+    depends_on:
+      db:
+        condition: service_healthy
+    # Uncomment for GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=openscribe
+      - POSTGRES_PASSWORD=openscribe
+      - POSTGRES_DB=openscribe
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openscribe"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
