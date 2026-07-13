@@ -16,7 +16,7 @@ Highlight. Take notes. Study. Write. All from your browser.
 ## Quick Start
 
 ```bash
-git clone https://github.com/yoav/openscribe
+git clone https://github.com/phantomic12/openscribe
 cd openscribe
 docker compose up -d
 ```
