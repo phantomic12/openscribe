@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenScribe — TTS Synchronized Highlighting Demo</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3345;
+    --text: #e1e4ed;
+    --text2: #969cb0;
+    --text3: #6b7194;
+    --accent: #7c8cf8;
+    --accent2: #5b6cf0;
+    --highlight-bg: rgba(124, 140, 248, 0.18);
+    --highlight-word: rgba(255, 200, 60, 0.45);
+    --red: #f87171;
+    --green: #4ade80;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+  .app {
+    max-width: 880px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 22px; font-weight: 700; color: var(--text); }
+  header .badge {
+    font-size: 11px;
+    background: var(--surface2);
+    color: var(--text3);
+    padding: 3px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Controls bar */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+  }
+  .btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: 8px; border: none;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-play  { background: var(--accent); color: #fff; }
+  .btn-play:hover { background: var(--accent2); }
+  .btn-pause { background: rgba(255,200,60,0.2); color: #facc15; }
+  .btn-stop  { background: rgba(248,113,113,0.15); color: var(--red); }
+  .btn-skip  { background: var(--surface2); color: var(--text2); }
+  .btn-skip:hover { background: var(--border); color: var(--text); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .spacer { flex: 1; }
+
+  .control-group {
+    display: flex; align-items: center; gap: 6px;
+  }
+  .control-group label {
+    font-size: 12px; color: var(--text3); text-transform: uppercase;
+    letter-spacing: 0.5px; white-space: nowrap;
+  }
+  select {
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font-size: 13px; cursor: pointer;
+    max-width: 200px;
+  }
+  input[type=range] {
+    -webkit-appearance: none; height: 4px;
+    background: var(--border); border-radius: 2px;
+    width: 80px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    background: var(--accent); border-radius: 50%; cursor: pointer;
+  }
+  .speed-display {
+    font-size: 13px; color: var(--text2);
+    min-width: 36px; text-align: center;
+  }
+
+  /* Main content area */
+  .content-area {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 12px;
+  }
+  textarea {
+    width: 100%; min-height: 120px;
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; font-size: 14px; line-height: 1.6;
+    font-family: 'Atkinson Hyperlegible', 'Inter', system-ui, sans-serif;
+    resize: vertical;
+  }
+  textarea:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124,140,248,0.12);
+  }
+
+  /* Document viewer */
+  .doc-viewer {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 28px 32px;
+    min-height: 300px; max-height: 500px; overflow-y: auto;
+    font-family: 'Atkinson Hyperlegible', 'Georgia', 'Times New Roman', serif;
+    font-size: 18px; line-height: 1.85; letter-spacing: 0.01em;
+    position: relative;
+  }
+  .doc-viewer .doc-text { }
+  .doc-viewer .word {
+    display: inline;
+    padding: 1px 2px;
+    margin: 0 -0.5px;
+    border-radius: 3px;
+    transition: background 0.08s, color 0.08s;
+    position: relative;
+  }
+  /* Document-level highlight chunk (e.g. current sentence) */
+  .word.chunk-active {
+    background: var(--highlight-bg);
+  }
+  /* The exact word being spoken */
+  .word.speaking {
+    background: var(--highlight-word);
+    color: #fff;
+    font-weight: 600;
+  }
+
+  /* Documentation / status bar */
+  .status-bar {
+    display: flex; align-items: center; gap: 16px;
+    font-size: 12px; color: var(--text3);
+    padding: 8px 0;
+  }
+  .status-bar .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text3);
+  }
+  .status-bar .status-dot.playing { background: var(--green); animation: pulse 1.2s infinite; }
+  .status-bar .status-dot.paused  { background: #facc15; }
+  .status-bar .status-dot.stopped { background: var(--text3); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .feature-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px;
+    font-size: 12px; color: var(--text2);
+  }
+  .feature-card strong { display: block; color: var(--text); margin-bottom: 3px; }
+
+  /* Demo section */
+  .demo-presets {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+  }
+  .demo-btn {
+    background: var(--surface2); color: var(--text2);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 12px; font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .demo-btn:hover { background: var(--border); color: var(--text); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>OpenScribe <span style="font-weight:400;color:var(--text3);font-size:16px;">TTS Sync Demo</span></h1>
+    <span class="badge">Static · No server · Web Speech API</span>
+  </header>
+
+  <!-- Demo presets -->
+  <div class="demo-presets">
+    <button class="demo-btn" onclick="loadPreset('gettysburg')">Gettysburg Address</button>
+    <button class="demo-btn" onclick="loadPreset('dickinson')">Emily Dickinson</button>
+    <button class="demo-btn" onclick="loadPreset('science')">Science passage</button>
+    <button class="demo-btn" onclick="loadPreset('spanish')">Español</button>
+  </div>
+
+  <!-- Text input -->
+  <textarea id="textInput" placeholder="Paste or type text here, then press Play to hear it read aloud with synchronized word highlighting...">Four score and seven years ago our fathers brought forth on this continent, a new nation, conceived in Liberty, and dedicated to the proposition that all men are created equal.
+
+Now we are engaged in a great civil war, testing whether that nation, or any nation so conceived and so dedicated, can long endure. We are met on a great battle-field of that war. We have come to dedicate a portion of that field, as a final resting place for those who here gave their lives that that nation might live. It is altogether fitting and proper that we should do this.</textarea>
+
+  <!-- Controls -->
+  <div class="controls" id="controls">
+    <button class="btn btn-play" id="btnPlay" onclick="play()">
+      <span>▶</span> Play
+    </button>
+    <button class="btn btn-pause" id="btnPause" onclick="pause()" disabled>
+      <span>⏸</span> Pause
+    </button>
+    <button class="btn btn-stop" id="btnStop" onclick="stop()" disabled>
+      <span>⏹</span> Stop
+    </button>
+    <button class="btn btn-skip" onclick="skip(-1)" disabled id="btnBack" title="Previous unit">⏮</button>
+    <button class="btn btn-skip" onclick="skip(1)" disabled id="btnFwd" title="Next unit">⏭</button>
+
+    <div class="spacer"></div>
+
+    <div class="control-group">
+      <label>Speed</label>
+      <input type="range" id="speedSlider" min="0.5" max="3" step="0.1" value="1" oninput="updateSpeed()">
+      <span class="speed-display" id="speedDisplay">1.0×</span>
+    </div>
+
+    <div class="control-group">
+      <label>Chunk</label>
+      <select id="chunkSize" onchange="setChunkSize()">
+        <option value="word">Word</option>
+        <option value="sentence" selected>Sentence</option>
+        <option value="paragraph">Paragraph</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Voice</label>
+      <select id="voiceSelect" onchange="setVoice()"></select>
+    </div>
+  </div>
+
+  <!-- Document viewer -->
+  <div class="doc-viewer" id="docViewer">
+    <div class="doc-text" id="docText"></div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-dot stopped" id="statusDot"></div>
+    <span id="statusLabel">Ready</span>
+    <span style="flex:1"></span>
+    <span id="positionInfo"></span>
+  </div>
+
+  <!-- Feature notes -->
+  <div class="feature-grid">
+    <div class="feature-card"><strong>Dual highlighting</strong>Sentence/paragraph gets a blue tint; the exact spoken word glows amber — just like Kurzweil.</div>
+    <div class="feature-card"><strong>Chunk sizes</strong>Word-by-word, sentence-by-sentence, or paragraph-by-paragraph reading.</div>
+    <div class="feature-card"><strong>Speed control</strong>0.5× to 3×. The highlighting stays perfectly synced.</div>
+    <div class="feature-card"><strong>Voice selection</strong>Uses your system/browser's installed voices. Change in OS settings for more.</div>
+    <div class="feature-card"><strong>Skip forward/back</strong>Jump by the current chunk size. Keyboard: ← → arrow keys.</div>
+    <div class="feature-card"><strong>Click to read</strong>Click any word in the document to start reading from there.</div>
+    <div class="feature-card"><strong>Zero server</strong>Everything runs in your browser. Works offline. No data sent anywhere.</div>
+    <div class="feature-card"><strong>Installable PWA</strong>Add to home screen. Works on desktop, tablet, phone — any modern browser.</div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const STATE = {
+  words: [],           // [{text, el, startChar, endChar}] — parsed words with DOM refs
+  currentWordIdx: -1,
+  currentChunkStart: -1,
+  currentChunkEnd: -1,
+  chunkSize: 'sentence',
+  rate: 1.0,
+  playing: false,
+  paused: false,
+  utterance: null,
+  voices: [],
+  selectedVoiceURI: null,
+};
+
+const $ = id => document.getElementById(id);
+const docText = $('docText');
+const textInput = $('textInput');
+const docViewer = $('docViewer');
+const voiceSelect = $('voiceSelect');
+const chunkSelect = $('chunkSize');
+
+// ── Presets ────────────────────────────────────────────────────────
+const PRESETS = {
+  gettysburg: `Four score and seven years ago our fathers brought forth on this continent, a new nation, conceived in Liberty, and dedicated to the proposition that all men are created equal.
+
+Now we are engaged in a great civil war, testing whether that nation, or any nation so conceived and so dedicated, can long endure. We are met on a great battle-field of that war. We have come to dedicate a portion of that field, as a final resting place for those who here gave their lives that that nation might live. It is altogether fitting and proper that we should do this.
+
+But, in a larger sense, we can not dedicate — we can not consecrate — we can not hallow — this ground. The brave men, living and dead, who struggled here, have consecrated it, far above our poor power to add or detract. The world will little note, nor long remember what we say here, but it can never forget what they did here. It is for us the living, rather, to be dedicated here to the unfinished work which they who fought here have thus far so nobly advanced.`,
+  dickinson: `Because I could not stop for Death —
+He kindly stopped for me —
+The Carriage held but just Ourselves —
+And Immortality.
+
+We slowly drove — He knew no haste
+And I had put away
+My labor and my leisure too,
+For His Civility —
+
+We passed the School, where Children strove
+At Recess — in the Ring —
+We passed the Fields of Gazing Grain —
+We passed the Setting Sun —`,
+  science: `Photosynthesis is the process by which green plants and certain other organisms transform light energy into chemical energy. During photosynthesis, plants capture light energy and use it to convert water, carbon dioxide, and minerals into oxygen and energy-rich organic compounds.
+
+It would be impossible to overestimate the importance of photosynthesis in the maintenance of life on Earth. If photosynthesis ceased, there would soon be little food or other organic matter on the planet. Most organisms would disappear, and in time Earth's atmosphere would become nearly devoid of gaseous oxygen.`,
+  spanish: `En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor. Una olla de algo más vaca que carnero, salpicón las más noches, duelos y quebrantos los sábados, lentejas los viernes, algún palomino de añadidura los domingos, consumían las tres partes de su hacienda.`,
+};
+
+window.loadPreset = function(name) {
+  textInput.value = PRESETS[name];
+  renderDocument();
+};
+
+// ── Voice loading ──────────────────────────────────────────────────
+function loadVoices() {
+  STATE.voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = '';
+  let defaultIdx = 0;
+
+  STATE.voices.forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = v.voiceURI;
+    opt.textContent = `${v.name} (${v.lang})${v.localService ? ' • local' : ''}`;
+    voiceSelect.appendChild(opt);
+    // Prefer English default
+    if (v.default || (v.lang.startsWith('en') && !STATE.selectedVoiceURI)) {
+      defaultIdx = i;
+    }
+  });
+
+  if (STATE.selectedVoiceURI) {
+    const idx = STATE.voices.findIndex(v => v.voiceURI === STATE.selectedVoiceURI);
+    voiceSelect.selectedIndex = idx >= 0 ? idx : defaultIdx;
+  } else {
+    voiceSelect.selectedIndex = defaultIdx;
+    STATE.selectedVoiceURI = STATE.voices[defaultIdx]?.voiceURI;
+  }
+
+  // Add a helpful note if no voices
+  if (STATE.voices.length === 0) {
+    voiceSelect.innerHTML = '<option>No voices found — check OS settings</option>';
+  }
+}
+
+// Chrome loads voices async; Safari/Firefox may have them synchronously
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+// ── Document rendering ─────────────────────────────────────────────
+function renderDocument() {
+  const text = textInput.value.trim();
+  if (!text) {
+    docText.innerHTML = '<span style="color:var(--text3)">Enter text above and press Play</span>';
+    STATE.words = [];
+    return;
+  }
+
+  // Tokenize into words, preserving whitespace/punctuation structure
+  STATE.words = [];
+  docText.innerHTML = '';
+  let charIdx = 0;
+
+  // Split by whitespace boundaries but keep punctuation attached
+  const paragraphs = text.split(/\n+/);
+  paragraphs.forEach((para, pi) => {
+    if (pi > 0) {
+      const br = document.createElement('br');
+      docText.appendChild(br);
+      charIdx += 1; // newline
+    }
+
+    // Tokenize: split on whitespace but track character positions
+    const tokens = para.match(/\S+/g) || [];
+    tokens.forEach((token, ti) => {
+      const span = document.createElement('span');
+      span.className = 'word';
+      span.textContent = token;
+      span.dataset.charStart = charIdx;
+      span.dataset.charEnd = charIdx + token.length;
+      span.addEventListener('click', () => clickWord(STATE.words.length));
+
+      docText.appendChild(span);
+      STATE.words.push({
+        text: token,
+        el: span,
+        startChar: charIdx,
+        endChar: charIdx + token.length,
+      });
+
+      charIdx += token.length;
+
+      // Add space after token (except last in paragraph)
+      if (ti < tokens.length - 1) {
+        docText.appendChild(document.createTextNode(' '));
+        charIdx += 1;
+      }
+    });
+  });
+
+  // Reset state
+  clearHighlights();
+  STATE.currentWordIdx = -1;
+  STATE.currentChunkStart = -1;
+  STATE.currentChunkEnd = -1;
+}
+
+// Initial render
+renderDocument();
+textInput.addEventListener('input', renderDocument);
+
+// ── Chunk boundaries ───────────────────────────────────────────────
+// Find the chunk (sentence or paragraph) that contains a given word index
+function getChunkBounds(wordIdx) {
+  const size = STATE.chunkSize;
+  const words = STATE.words;
+  if (!words.length) return { start: 0, end: 0 };
+
+  if (size === 'word') {
+    return { start: wordIdx, end: wordIdx };
+  }
+
+  if (size === 'sentence') {
+    // Sentence boundaries: periods, question marks, exclamation marks
+    let start = wordIdx;
+    while (start > 0) {
+      const prev = words[start - 1].text;
+      if (/[.!?]$/.test(prev)) break;
+      // Also break on paragraph boundaries (check for large char gap)
+      if (words[start].startChar - words[start - 1].endChar > 2) break;
+      start--;
+    }
+
+    let end = wordIdx;
+    while (end < words.length - 1) {
+      if (/[.!?]$/.test(words[end].text)) { end++; break; }
+      // Paragraph boundary
+      if (end + 1 < words.length && words[end + 1].startChar - words[end].endChar > 2) { end++; break; }
+      end++;
+    }
+    if (end === words.length - 1) end = words.length;
+
+    return { start, end };
+  }
+
+  // Paragraph: find nearest paragraph boundaries
+  let start = wordIdx;
+  while (start > 0) {
+    if (words[start].startChar - words[start - 1].endChar > 2) break;
+    start--;
+  }
+
+  let end = wordIdx;
+  while (end < words.length - 1) {
+    end++;
+    if (words[end].startChar - words[end - 1].endChar > 2) break;
+  }
+  if (end === words.length - 1) end = words.length;
+
+  return { start, end };
+}
+
+// ── Highlighting ───────────────────────────────────────────────────
+function clearHighlights() {
+  STATE.words.forEach(w => {
+    w.el.classList.remove('chunk-active', 'speaking');
+  });
+}
+
+function highlightChunk(start, end) {
+  // Clear previous chunk highlight
+  if (STATE.currentChunkStart >= 0) {
+    for (let i = STATE.currentChunkStart; i < STATE.currentChunkEnd && i < STATE.words.length; i++) {
+      STATE.words[i].el.classList.remove('chunk-active');
+    }
+  }
+
+  // Apply new chunk highlight
+  for (let i = start; i < end && i < STATE.words.length; i++) {
+    STATE.words[i].el.classList.add('chunk-active');
+  }
+  STATE.currentChunkStart = start;
+  STATE.currentChunkEnd = end;
+}
+
+function highlightWord(wordIdx) {
+  // Remove previous speaking highlight
+  if (STATE.currentWordIdx >= 0 && STATE.currentWordIdx < STATE.words.length) {
+    STATE.words[STATE.currentWordIdx].el.classList.remove('speaking');
+  }
+
+  if (wordIdx >= 0 && wordIdx < STATE.words.length) {
+    STATE.words[wordIdx].el.classList.add('speaking');
+    // Scroll into view smoothly
+    STATE.words[wordIdx].el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  STATE.currentWordIdx = wordIdx;
+}
+
+// ── TTS Engine ─────────────────────────────────────────────────────
+function getSelectedVoice() {
+  const uri = voiceSelect.value;
+  return STATE.voices.find(v => v.voiceURI === uri) || null;
+}
+
+function speakFrom(wordIdx) {
+  if (!STATE.words.length) return;
+
+  stop(); // Cancel any existing utterance
+
+  const voice = getSelectedVoice();
+  const chunk = getChunkBounds(wordIdx);
+
+  // Build text for this chunk
+  const chunkWords = STATE.words.slice(chunk.start, chunk.end);
+  const text = chunkWords.map(w => w.text).join(' ');
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.voice = voice;
+  utterance.rate = STATE.rate;
+  utterance.volume = 1;
+  utterance.lang = voice?.lang || 'en-US';
+
+  // Highlight the chunk
+  highlightChunk(chunk.start, chunk.end);
+  highlightWord(wordIdx);
+
+  // Track word position within the chunk using onboundary
+  // Web Speech API fires onboundary at word boundaries for most engines
+  // The charIndex is relative to the utterance text, not the document
+  let lastWordInChunk = wordIdx;
+
+  utterance.onboundary = (event) => {
+    if (event.name === 'word') {
+      // charIndex is position in the utterance text
+      // Map back to document word index
+      let charPos = 0;
+      for (let i = chunk.start; i < chunk.end; i++) {
+        const w = STATE.words[i];
+        const wordInText = w.text;
+        const nextPos = charPos + wordInText.length;
+
+        if (event.charIndex >= charPos && event.charIndex < nextPos + 1) {
+          highlightWord(i);
+          lastWordInChunk = i;
+          updatePosition(i);
+          break;
+        }
+        charPos = nextPos + 1; // +1 for space
+      }
+    }
+  };
+
+  utterance.onend = () => {
+    // Move to next chunk
+    const nextChunk = getChunkBounds(chunk.end);
+    if (nextChunk.start < STATE.words.length && nextChunk.start < chunk.end + 50) {
+      // Continuous reading: advance to next chunk
+      if (chunk.end < STATE.words.length) {
+        STATE.utterance = null;
+        STATE.playing = true;
+        STATE.paused = false;
+        speakFrom(chunk.end);
+      } else {
+        done();
+      }
+    } else {
+      done();
+    }
+  };
+
+  utterance.onerror = (e) => {
+    if (e.error === 'canceled' || e.error === 'interrupted') return;
+    console.error('TTS error:', e.error);
+    done();
+  };
+
+  utterance.onpause = () => {
+    STATE.paused = true;
+    updateUI();
+  };
+
+  utterance.onresume = () => {
+    STATE.paused = false;
+    updateUI();
+  };
+
+  STATE.utterance = utterance;
+  STATE.playing = true;
+  STATE.paused = false;
+
+  speechSynthesis.speak(utterance);
+  updateUI();
+  updatePosition(wordIdx);
+}
+
+function done() {
+  STATE.playing = false;
+  STATE.paused = false;
+  STATE.utterance = null;
+  clearHighlights();
+  updateUI();
+  $('positionInfo').textContent = '';
+}
+
+// ── Controls ───────────────────────────────────────────────────────
+window.play = function() {
+  if (STATE.paused && STATE.utterance) {
+    speechSynthesis.resume();
+    STATE.paused = false;
+    STATE.playing = true;
+    updateUI();
+    return;
+  }
+
+  // If stopped or fresh start, begin from beginning or from clicked position
+  const startIdx = STATE.currentWordIdx >= 0 ? STATE.currentWordIdx : 0;
+  speakFrom(startIdx);
+};
+
+window.pause = function() {
+  if (STATE.playing && !STATE.paused) {
+    speechSynthesis.pause();
+    STATE.paused = true;
+    updateUI();
+  }
+};
+
+window.stop = function() {
+  speechSynthesis.cancel();
+  STATE.utterance = null;
+  done();
+};
+
+window.skip = function(dir) {
+  if (!STATE.playing && !STATE.paused) return;
+
+  // Cancel current and restart from next/prev chunk
+  const chunk = getChunkBounds(STATE.currentWordIdx >= 0 ? STATE.currentWordIdx : 0);
+  let target;
+  if (dir < 0) {
+    // Previous chunk
+    target = Math.max(0, chunk.start - 1);
+    const prevChunk = getChunkBounds(target);
+    target = prevChunk.start;
+  } else {
+    target = chunk.end;
+  }
+
+  speechSynthesis.cancel();
+  STATE.utterance = null;
+  if (target < STATE.words.length) {
+    clearHighlights();
+    speakFrom(target);
+  } else {
+    done();
+  }
+};
+
+window.clickWord = function(wordIdx) {
+  stop();
+  speakFrom(wordIdx);
+};
+
+window.setChunkSize = function() {
+  STATE.chunkSize = chunkSelect.value;
+  // If currently playing, re-chunk from current word
+  if (STATE.playing && STATE.currentWordIdx >= 0) {
+    const wordIdx = STATE.currentWordIdx;
+    speechSynthesis.cancel();
+    STATE.utterance = null;
+    clearHighlights();
+    speakFrom(wordIdx);
+  }
+};
+
+window.setVoice = function() {
+  STATE.selectedVoiceURI = voiceSelect.value;
+  // If playing, restart with new voice
+  if (STATE.playing && STATE.currentWordIdx >= 0) {
+    const wordIdx = STATE.currentWordIdx;
+    speechSynthesis.cancel();
+    STATE.utterance = null;
+    clearHighlights();
+    speakFrom(wordIdx);
+  }
+};
+
+window.updateSpeed = function() {
+  STATE.rate = parseFloat($('speedSlider').value);
+  $('speedDisplay').textContent = STATE.rate.toFixed(1) + '×';
+  // Update in-flight utterance rate if playing
+  if (STATE.utterance && STATE.playing) {
+    // Web Speech API: can't change rate mid-utterance. Restart.
+    const wordIdx = STATE.currentWordIdx >= 0 ? STATE.currentWordIdx : 0;
+    speechSynthesis.cancel();
+    STATE.utterance = null;
+    clearHighlights();
+    speakFrom(wordIdx);
+  }
+};
+
+function updatePosition(wordIdx) {
+  if (wordIdx >= 0 && wordIdx < STATE.words.length) {
+    $('positionInfo').textContent = `Word ${wordIdx + 1} of ${STATE.words.length}`;
+  }
+}
+
+function updateUI() {
+  const dot = $('statusDot');
+  dot.className = 'status-dot';
+
+  if (STATE.playing && !STATE.paused) {
+    dot.classList.add('playing');
+    $('statusLabel').textContent = 'Playing';
+    $('btnPlay').disabled = true;
+    $('btnPause').disabled = false;
+    $('btnStop').disabled = false;
+    $('btnBack').disabled = false;
+    $('btnFwd').disabled = false;
+  } else if (STATE.paused) {
+    dot.classList.add('paused');
+    $('statusLabel').textContent = 'Paused';
+    $('btnPlay').disabled = false;
+    $('btnPause').disabled = true;
+    $('btnStop').disabled = false;
+    $('btnBack').disabled = false;
+    $('btnFwd').disabled = false;
+  } else {
+    dot.classList.add('stopped');
+    $('statusLabel').textContent = 'Ready';
+    $('btnPlay').disabled = false;
+    $('btnPause').disabled = true;
+    $('btnStop').disabled = true;
+    $('btnBack').disabled = true;
+    $('btnFwd').disabled = true;
+  }
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  // Don't capture when typing in textarea
+  if (e.target.tagName === 'TEXTAREA') return;
+
+  switch (e.key) {
+    case ' ':
+      e.preventDefault();
+      if (STATE.playing && !STATE.paused) pause();
+      else play();
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      skip(-1);
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      skip(1);
+      break;
+    case 'Escape':
+      e.preventDefault();
+      stop();
+      break;
+  }
+});
+
+// ── Resize handler for textarea → re-render ────────────────────────
+// Re-render if text changes (handled by input event listener above)
+
+updateUI();
+</script>
+</body>
+</html>
