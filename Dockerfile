@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 curl \
@@ -19,7 +19,7 @@ RUN npm ci
 COPY frontend/ .
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.14-slim
 WORKDIR /app
 COPY --from=0 /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=0 /app /app
