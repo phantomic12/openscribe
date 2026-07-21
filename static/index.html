@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenScribe — Literacy Platform</title>
+<link rel="stylesheet" href="css/main.css">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1117">
+<meta name="description" content="Open-source literacy platform. Read, study, and write — all from your browser.">
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <h1>OpenScribe <span>Literacy Platform</span></h1>
+    <div class="header-actions">
+      <button class="btn btn-sm btn-secondary" onclick="App.toggleTheme()" title="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button class="btn btn-sm btn-secondary" onclick="App.importKesx()">📥 Import .kesx</button>
+      <button class="btn btn-sm btn-secondary" onclick="App.exportCurrentKesx()">📤 Export .kesx</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-panel="reader">📖 Reader</div>
+    <div class="tab" data-panel="study">🔍 Study Tools</div>
+    <div class="tab" data-panel="writing">✏️ Writing</div>
+    <div class="tab" data-panel="library">📚 Library</div>
+    <div class="tab" data-panel="settings">⚙️ Settings</div>
+  </div>
+
+  <div class="panels" id="panels">
+
+    <!-- ─── READER PANEL ───────────────────────────────────── -->
+    <div class="panel active" id="panel-reader">
+      <!-- Drop zone -->\
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <strong>Drop a document here</strong> or click to browse<br>
+        <small>PDF, DOCX, EPUB, TXT, PNG, JPG — or paste text below</small>
+        <input type="file" id="fileInput" accept=".pdf,.docx,.epub,.txt,.rtf,.html,.png,.jpg,.jpeg,.bmp,.tiff" onchange="App.handleFile(event)" multiple>
+      </div>
+
+      <!-- Text input -->
+      <textarea id="textInput" placeholder="Or paste text here, then press Play to hear it read aloud with synchronized word highlighting..."></textarea>
+
+      <!-- Controls -->
+      <div class="controls-bar" id="controls">
+        <button class="btn btn-primary btn-sm" id="btnPlay" onclick="App.play()">▶ Play</button>
+        <button class="btn btn-sm btn-secondary" id="btnPause" onclick="App.pause()" disabled>⏸ Pause</button>
+        <button class="btn btn-sm btn-danger" id="btnStop" onclick="App.stop()" disabled>⏹ Stop</button>
+        <button class="btn btn-sm btn-secondary" id="btnBack" onclick="App.skip(-1)" disabled title="Previous">⏮</button>
+        <button class="btn btn-sm btn-secondary" id="btnFwd" onclick="App.skip(1)" disabled title="Next">⏭</button>
+
+        <div class="spacer"></div>
+
+        <div class="control-group">
+          <label>Speed</label>
+          <input type="range" id="speedSlider" min="0.5" max="3" step="0.1" value="1" oninput="App.setSpeed()">
+          <span class="speed-display" id="speedDisplay">1.0×</span>
+        </div>
+        <div class="control-group">
+          <label>Chunk</label>
+          <select id="chunkSize" onchange="App.setChunkSize()">
+            <option value="word">Word</option>
+            <option value="sentence" selected>Sentence</option>
+            <option value="paragraph">Paragraph</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <label>Voice</label>
+          <select id="voiceSelect" onchange="App.setVoice()"></select>
+        </div>
+        <button class="btn btn-sm btn-secondary" id="btnSilent" onclick="App.toggleSilent()">🔇 Silent</button>
+      </div>
+
+      <!-- Document Viewer -->
+      <div class="doc-container">
+        <div class="page-nav" id="pageNav" style="display:none">
+          <button class="btn btn-sm btn-secondary" onclick="Reader.prevPage()">◀ Prev</button>
+          <span id="pageInfo">Page 1 of 1</span>
+          <button class="btn btn-sm btn-secondary" onclick="Reader.nextPage()">Next ▶</button>
+        </div>
+        <div class="doc-viewer" id="docViewer">
+          <span style="color:var(--text3)">Drop a file or type text above, then press Play</span>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="status-bar">
+        <div class="status-dot stopped" id="statusDot"></div>
+        <span id="statusLabel">Ready</span>
+        <span style="flex:1"></span>
+        <span id="positionInfo"></span>
+      </div>
+    </div>
+
+    <!-- ─── STUDY PANEL ─────────────────────────────────────── -->
+    <div class="panel" id="panel-study">
+      <!-- Annotation tools -->
+      <div class="annotation-tools" id="annotationTools">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;">Highlighter:</span>
+        <div id="colorSwatches" style="display:flex;gap:4px;"></div>
+        <span id="currentLabel" style="font-size:11px;color:var(--text2);"></span>
+        <div class="spacer"></div>
+        <button class="btn btn-sm btn-secondary" onclick="Annotations.highlightSelection()">🖌 Highlight Selection</button>
+        <button class="btn btn-sm btn-secondary" onclick="App.addStickyNote()">📝 Add Note</button>
+        <button class="btn btn-sm btn-secondary" onclick="App.addBookmark()">🔖 Bookmark</button>
+        <button class="btn btn-sm btn-secondary" onclick="App.addBubbleNote()">💬 Bubble Note</button>
+        <button class="btn btn-sm btn-danger" onclick="Annotations.eraseHighlightsOnPage()">🗑 Clear Page</button>
+      </div>
+
+      <!-- Extraction -->
+      <div class="feature-grid">
+        <div class="feature-card" onclick="App.extractStudyGuide()" style="cursor:pointer">
+          <strong>📋 Study Guide</strong> Extract highlights to structured notes
+        </div>
+        <div class="feature-card" onclick="App.extractColumnNotes()" style="cursor:pointer">
+          <strong>📊 Column Notes</strong> 3-column table from labeled highlights
+        </div>
+        <div class="feature-card" onclick="App.extractVocab()" style="cursor:pointer">
+          <strong>📖 Vocabulary Guide</strong> Word list from Vocab highlights
+        </div>
+        <div class="feature-card" onclick="App.exportDocument('txt')" style="cursor:pointer">
+          <strong>📄 Export as TXT</strong> Download document with annotations
+        </div>
+        <div class="feature-card" onclick="App.exportDocument('kesx')" style="cursor:pointer">
+          <strong>📦 Export as .kesx</strong> Full document with all annotations
+        </div>
+        <div class="feature-card" onclick="App.showBookmarks()" style="cursor:pointer">
+          <strong>🔖 Bookmarks</strong> View and jump to bookmarks
+        </div>
+      </div>
+
+      <!-- Study output -->
+      <div class="study-output" id="studyOutput" style="display:none;"></div>
+    </div>
+
+    <!-- ─── WRITING PANEL ───────────────────────────────────── -->
+    <div class="panel" id="panel-writing">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-primary btn-sm" onclick="App.createNewDraft()">+ New Draft</button>
+        <select id="templateSelect" onchange="App.applyTemplate()" style="font-size:12px;">
+          <option value="">📋 Templates...</option>
+        </select>
+        <select id="draftSelect" onchange="App.selectDraft()" style="font-size:12px;">
+          <option value="">📝 Open draft...</option>
+        </select>
+        <div class="spacer"></div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="speakAsType" onchange="App.toggleSpeakAsType()"> Speak as you type
+        </label>
+        <button class="btn btn-sm btn-secondary" onclick="App.checkSpelling()">✓ Spell Check</button>
+        <button class="btn btn-sm btn-secondary" onclick="App.downloadDraft()">💾 Download</button>
+      </div>
+
+      <!-- Rich text editor -->
+      <div class="editor-toolbar" id="editorToolbar">
+        <button onclick="document.execCommand('bold')" title="Bold"><b>B</b></button>
+        <button onclick="document.execCommand('italic')" title="Italic"><i>I</i></button>
+        <button onclick="document.execCommand('underline')" title="Underline"><u>U</u></button>
+        <button onclick="document.execCommand('insertUnorderedList')" title="Bullets">•≡</button>
+        <button onclick="document.execCommand('insertOrderedList')" title="Numbers">1.</button>
+        <button onclick="document.execCommand('formatBlock',false,'h2')" title="Heading">H</button>
+      </div>
+
+      <div class="editor-area" id="editorArea" contenteditable="true" placeholder="Start writing here...">
+      </div>
+
+      <!-- Word prediction -->
+      <div class="predict-popup" id="predictPopup"></div>
+
+      <!-- Writing features -->
+      <div class="feature-grid">
+        <div class="feature-card" onclick="App.lookupWord()" style="cursor:pointer">
+          <strong>📕 Dictionary</strong> Look up selected word
+        </div>
+        <div class="feature-card" onclick="App.lookupThesaurus()" style="cursor:pointer">
+          <strong>📖 Thesaurus</strong> Find synonyms for selected word
+        </div>
+        <div class="feature-card">
+          <strong>📝 Word Prediction</strong> Suggestions as you type
+        </div>
+        <div class="feature-card">
+          <strong>🔊 Speak-as-typing</strong> Reads characters/words/sentences
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── LIBRARY PANEL ───────────────────────────────────── -->
+    <div class="panel" id="panel-library">
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('fileInput').click()">📤 Import Document</button>
+        <button class="btn btn-sm btn-secondary" onclick="App.importKesx()">📥 Import .kesx</button>
+        <div class="spacer"></div>
+        <input type="text" id="librarySearch" placeholder="Search documents..." style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-size:12px;width:200px;" oninput="App.filterLibrary()">
+      </div>
+      <div class="doc-grid" id="docGrid">
+        <div class="empty-state"><h3>No documents yet</h3>Import a PDF, EPUB, DOCX, or paste text to get started.</div>
+      </div>
+    </div>
+
+    <!-- ─── SETTINGS PANEL ──────────────────────────────────── -->
+    <div class="panel" id="panel-settings">
+      <div class="feature-grid">
+        <div class="feature-card" onclick="App.toggleTheme()" style="cursor:pointer">
+          <strong>🌓 Theme</strong> Toggle dark/light mode
+        </div>
+        <div class="feature-card">
+          <strong>📖 Font</strong> Atkinson Hyperlegible (dyslexia-friendly)
+        </div>
+        <div class="feature-card">
+          <strong>💾 Storage</strong> All data stored locally in your browser
+        </div>
+        <div class="feature-card">
+          <strong>🔒 Privacy</strong> Zero data leaves your machine
+        </div>
+        <div class="feature-card">
+          <strong>⌨️ Shortcuts</strong> Space=Play/Pause · ←→=Skip · Esc=Stop
+        </div>
+        <div class="feature-card">
+          <strong>📱 PWA</strong> Install on desktop, tablet, phone — works offline
+        </div>
+        <div class="feature-card">
+          <strong>🔊 Voices</strong> Uses your OS/browser's installed TTS voices
+        </div>
+        <div class="feature-card">
+          <strong>🤖 OCR</strong> Tesseract.js for image-to-text in browser
+        </div>
+        <div class="feature-card">
+          <strong>📦 .kesx Format</strong> Open standard — directory-based, JSON + images
+        </div>
+        <div class="feature-card">
+          <strong>🔌 Server Edition</strong> Self-host with docker compose up for multi-user
+        </div>
+      </div>
+      <div class="feature-card" style="margin-top:8px;">
+        <strong>About OpenScribe</strong><br>
+        Open-source literacy platform. AGPL v3.<br>
+        <a href="https://github.com/phantomic12/openscribe" style="color:var(--accent)">github.com/phantomic12/openscribe</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<script src="js/storage.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/annotations.js"></script>
+<script src="js/writing.js"></script>
+<script>
+// ── App Shell ──────────────────────────────────────────────────
+const App = {
+  async init() {
+    await OSDB.ready;
+    await Reader.init('docViewer');
+    Annotations.init(Reader);
+    Writing.init();
+    this._initTabs();
+    this._initColorSwatches();
+    this._initTemplates();
+    this._populateVoices();
+    this._wireCallbacks();
+    this._initDropZone();
+    this._initEditor();
+    this._loadLibrary();
+
+    // Restore theme
+    const theme = await OSDB.getSetting('theme', 'dark');
+    document.documentElement.setAttribute('data-theme', theme);
+  },
+
+  // ── Tabs ──────────────────────────────────────────────────
+  _initTabs() {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        if (tab.dataset.panel === 'library') this._loadLibrary();
+        if (tab.dataset.panel === 'writing') this._loadDrafts();
+      });
+    });
+  },
+
+  switchToReader() {
+    document.querySelector('.tab[data-panel="reader"]').click();
+  },
+
+  // ── Theme ─────────────────────────────────────────────────
+  async toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    await OSDB.setSetting('theme', next);
+  },
+
+  // ── File Handling ─────────────────────────────────────────
+  async handleFile(event) {
+    const files = event.target.files;
+    if (!files.length) return;
+    for (const file of files) {
+      this.toast(`Loading ${file.name}...`);
+      try {
+        const doc = await Reader.loadFile(file);
+        this.toast(`Loaded "${file.name}"`, 'success');
+        this.switchToReader();
+        this._updatePageNav();
+      } catch(e) {
+        this.toast(`Failed to load ${file.name}: ${e.message}`, 'error');
+      }
+    }
+  },
+
+  async _loadFromText() {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) return;
+    const title = text.split('\n')[0].substring(0, 60) || 'Untitled';
+    const doc = await Reader.loadText(title, text);
+    this.switchToReader();
+    this._updatePageNav();
+  },
+
+  // ── Reader Controls ───────────────────────────────────────
+  play() {
+    if (!Reader.STATE.words.length && document.getElementById('textInput').value.trim()) {
+      this._loadFromText().then(() => Reader.play());
+      return;
+    }
+    if (!Reader.STATE.words.length && Reader.STATE.documentId) {
+      Reader._renderCurrentPage().then(() => Reader.play());
+      return;
+    }
+    Reader.play();
+  },
+  pause() { Reader.pause(); },
+  stop() { Reader.stop(); },
+  skip(dir) { Reader.skip(dir); },
+  setSpeed() {
+    const val = document.getElementById('speedSlider').value;
+    document.getElementById('speedDisplay').textContent = parseFloat(val).toFixed(1) + '×';
+    Reader.setSpeed(val);
+  },
+  setChunkSize() {
+    const val = document.getElementById('chunkSize').value;
+    Reader.setChunkSize(val);
+  },
+  setVoice() {
+    const uri = document.getElementById('voiceSelect').value;
+    Reader.setVoice(uri);
+  },
+  toggleSilent() {
+    const btn = document.getElementById('btnSilent');
+    const isSilent = !Reader.STATE.silent;
+    Reader.setSilentMode(isSilent);
+    btn.textContent = isSilent ? '🔊 Audible' : '🔇 Silent';
+  },
+
+  // ── Voice Populating ──────────────────────────────────────
+  _populateVoices() {
+    const load = () => {
+      const voices = speechSynthesis.getVoices();
+      const sel = document.getElementById('voiceSelect');
+      sel.innerHTML = '';
+      voices.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = v.voiceURI;
+        opt.textContent = `${v.name} (${v.lang})${v.localService ? ' • local' : ''}`;
+        sel.appendChild(opt);
+        if (v.default || (v.lang.startsWith('en') && !Reader.STATE.selectedVoiceURI)) {
+          sel.selectedIndex = i;
+          Reader.STATE.selectedVoiceURI = v.voiceURI;
+        }
+      });
+      if (!voices.length) sel.innerHTML = '<option>No voices — check OS settings</option>';
+    };
+    load();
+    speechSynthesis.onvoiceschanged = load;
+  },
+
+  // ── Color Swatches ────────────────────────────────────────
+  _initColorSwatches() {
+    const container = document.getElementById('colorSwatches');
+    Annotations.colors.forEach((c, i) => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch' + (i === 0 ? ' active' : '');
+      sw.style.backgroundColor = c.color;
+      sw.title = `${c.name} — ${c.label}`;
+      sw.addEventListener('click', () => {
+        Annotations.setColor(c.color, c.label);
+        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        document.getElementById('currentLabel').textContent = c.label;
+      });
+      container.appendChild(sw);
+    });
+    document.getElementById('currentLabel').textContent = Annotations.colors[0].label;
+  },
+
+  // ── Templates ─────────────────────────────────────────────
+  _initTemplates() {
+    const sel = document.getElementById('templateSelect');
+    Writing.getTemplates().forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.name;
+      opt.textContent = t.name;
+      sel.appendChild(opt);
+    });
+  },
+
+  // ── Annotations ───────────────────────────────────────────
+  async addStickyNote() {
+    const text = prompt('Note text:');
+    if (!text) return;
+    await Annotations.addNote(100, 100, text, 'sticky_note');
+    this.toast('Note added', 'success');
+  },
+
+  async addBookmark() {
+    const idx = Reader.STATE.currentWordIdx >= 0 ? Reader.STATE.currentWordIdx : 0;
+    await Annotations.addBookmark(idx);
+    this.toast('Bookmark added', 'success');
+  },
+
+  async addBubbleNote() {
+    const qType = prompt('Question type (multiple_choice, true_false, short_answer):', 'multiple_choice');
+    const question = prompt('Question:');
+    if (!question) return;
+    const answer = prompt('Answer:');
+    const idx = Reader.STATE.currentWordIdx >= 0 ? Reader.STATE.currentWordIdx : 0;
+    await Annotations.addBubbleNote(idx, qType, question, answer);
+    this.toast('Bubble note added', 'success');
+  },
+
+  // ── Extraction ────────────────────────────────────────────
+  async extractStudyGuide() {
+    const result = await Annotations.extractStudyGuide();
+    this._showStudyOutput(result.title, result.content);
+  },
+  async extractColumnNotes() {
+    const result = await Annotations.extractColumnNotes();
+    this._showStudyOutput(result.title, result.content);
+  },
+  async extractVocab() {
+    const result = await Annotations.extractVocabularyGuide();
+    this._showStudyOutput(result.title, result.content);
+  },
+  _showStudyOutput(title, content) {
+    const div = document.getElementById('studyOutput');
+    div.style.display = 'block';
+    div.innerHTML = `<h3 style="margin-bottom:12px">${title}</h3><pre style="white-space:pre-wrap;font-size:14px;">${content}</pre>`;
+    document.querySelector('.tab[data-panel="study"]').click();
+  },
+
+  async showBookmarks() {
+    const bookmarks = await Annotations.listBookmarks();
+    if (!bookmarks.length) { this.toast('No bookmarks'); return; }
+    let html = '<h3>Bookmarks</h3>';
+    bookmarks.forEach((b, i) => {
+      html += `<p style="cursor:pointer;padding:4px" onclick="App.goToBookmark('${b.id}', ${b.pageIndex}, ${b.wordIndex})">
+        ${i+1}. Page ${b.pageIndex+1}: "${b.noteText}"</p>`;
+    });
+    this._showStudyOutput('Bookmarks', html);
+  },
+
+  goToBookmark(id, page, wordIdx) {
+    Reader.goToPage(page);
+    setTimeout(() => Reader.clickWord(wordIdx), 200);
+    this.switchToReader();
+  },
+
+  // ── Export ──────────────────────────────────────────────────
+  async exportDocument(format) {
+    if (!Reader.STATE.documentId) { this.toast('No document loaded', 'error'); return; }
+    if (format === 'kesx') {
+      const kesx = await OSDB.exportKesx(Reader.STATE.documentId);
+      const blob = new Blob([JSON.stringify(kesx, null, 2)], { type: 'application/json' });
+      this._downloadBlob(blob, `${kesx.manifest.title}.kesx.json`);
+    } else if (format === 'txt') {
+      const pages = Reader.STATE.pages;
+      let text = '';
+      pages.forEach((p, i) => { text += `--- Page ${i+1} ---\n${p.text}\n\n`; });
+      const anns = await OSDB.getAnnotations(Reader.STATE.documentId);
+      if (anns.length) {
+        text += '\n--- Annotations ---\n';
+        anns.forEach(a => { text += `[${a.type}] ${a.noteText || a.text || ''}\n`; });
+      }
+      const blob = new Blob([text], { type: 'text/plain' });
+      const doc = await OSDB.getDocument(Reader.STATE.documentId);
+      this._downloadBlob(blob, `${doc?.title || 'document'}.txt`);
+    }
+  },
+
+  async exportCurrentKesx() {
+    if (!Reader.STATE.documentId) { this.toast('No document loaded', 'error'); return; }
+    await this.exportDocument('kesx');
+  },
+
+  async importKesx() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,.kesx';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const kesx = JSON.parse(text);
+        const doc = await OSDB.importKesx(kesx);
+        await Reader.loadDocument(doc);
+        this.toast(`Imported "${doc.title}"`, 'success');
+        this.switchToReader();
+        this._updatePageNav();
+      } catch(e) {
+        this.toast(`Import failed: ${e.message}`, 'error');
+      }
+    };
+    input.click();
+  },
+
+  // ── Writing ────────────────────────────────────────────────
+  _initEditor() {
+    const editor = document.getElementById('editorArea');
+    // Auto-save on input
+    editor.addEventListener('input', () => {
+      Writing.saveDraftContent(editor.innerHTML);
+      // Word prediction
+      this._updatePredictions();
+    });
+    // Word prediction trigger
+    editor.addEventListener('keyup', (e) => {
+      if (e.key === 'Tab' && document.querySelector('.predict-popup .predict-item')) {
+        e.preventDefault();
+        this._acceptPrediction();
+      }
+    });
+  },
+
+  async _updatePredictions() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const textBeforeCursor = range.startContainer.textContent?.substring(0, range.startOffset) || '';
+    const predictions = Writing.predict(textBeforeCursor);
+    const popup = document.getElementById('predictPopup');
+    if (predictions.length === 0) { popup.style.display = 'none'; return; }
+    popup.innerHTML = predictions.map(p => `<div class="predict-item" onclick="App._acceptPrediction('${p.word}')">${p.word}</div>`).join('');
+    const rect = range.getBoundingClientRect();
+    popup.style.display = 'block';
+    popup.style.left = rect.left + 'px';
+    popup.style.top = (rect.bottom + 4) + 'px';
+  },
+
+  _acceptPrediction(word) {
+    if (!word) {
+      const first = document.querySelector('.predict-popup .predict-item');
+      if (first) word = first.textContent;
+      else return;
+    }
+    const editor = document.getElementById('editorArea');
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    // Find the partial word and complete it
+    const textNode = range.startContainer;
+    const offset = range.startOffset;
+    const text = textNode.textContent || '';
+    // Find start of current word
+    let wordStart = offset;
+    while (wordStart > 0 && /\S/.test(text[wordStart - 1])) wordStart--;
+    const partial = text.substring(wordStart, offset);
+    // Replace partial with full word
+    textNode.textContent = text.substring(0, wordStart) + word + text.substring(offset) + ' ';
+    // Move cursor
+    range.setStart(textNode, wordStart + word.length + 1);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.getElementById('predictPopup').style.display = 'none';
+  },
+
+  async createNewDraft() {
+    const draft = await Writing.createDraft('draft');
+    document.getElementById('editorArea').innerHTML = '';
+    document.querySelector('.tab[data-panel="writing"]').click();
+    this._refreshDraftList();
+  },
+
+  async applyTemplate() {
+    const name = document.getElementById('templateSelect').value;
+    if (!name) return;
+    const draft = await Writing.applyTemplate(name);
+    document.getElementById('editorArea').innerHTML = draft.content;
+    document.querySelector('.tab[data-panel="writing"]').click();
+    this._refreshDraftList();
+  },
+
+  async selectDraft() {
+    const id = document.getElementById('draftSelect').value;
+    if (!id) return;
+    const draft = Writing.STATE.drafts.find(d => d.id === id);
+    if (!draft) return;
+    Writing.setCurrentDraft(draft);
+    document.getElementById('editorArea').innerHTML = draft.content;
+  },
+
+  async _loadDrafts() { this._refreshDraftList(); },
+
+  _refreshDraftList() {
+    const sel = document.getElementById('draftSelect');
+    sel.innerHTML = '<option value="">📝 Open draft...</option>';
+    Writing.STATE.drafts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.title;
+      sel.appendChild(opt);
+    });
+  },
+
+  toggleSpeakAsType() {
+    const checked = document.getElementById('speakAsType').checked;
+    const editor = document.getElementById('editorArea');
+    if (checked) {
+      editor.addEventListener('input', this._onSpeakAsType);
+    } else {
+      editor.removeEventListener('input', this._onSpeakAsType);
+    }
+  },
+
+  _onSpeakAsType() {
+    const text = document.getElementById('editorArea').textContent;
+    if (text) Writing.speakAsTyping(text, 'word');
+  },
+
+  async checkSpelling() {
+    const text = document.getElementById('editorArea').textContent;
+    const errors = await Writing.checkSpelling(text);
+    if (!errors.length) { this.toast('No spelling errors found', 'success'); return; }
+    let msg = `Found ${errors.length} potential errors:\n`;
+    errors.forEach(e => { msg += `• "${e.word}" → ${e.suggestion}\n`; });
+    alert(msg);
+  },
+
+  downloadDraft() { Writing.downloadDraft('txt'); },
+
+  async lookupWord() {
+    const word = window.getSelection().toString().trim();
+    if (!word) { this.toast('Select a word first'); return; }
+    const result = await Writing.lookupWord(word);
+    if (!result) { this.toast(`No definition found for "${word}"`); return; }
+    let html = `<h3>${result.word}</h3>`;
+    if (result.phonetic) html += `<p style="color:var(--text3)">${result.phonetic}</p>`;
+    result.meanings.forEach(m => {
+      html += `<p><strong>${m.partOfSpeech}</strong></p><ul>`;
+      m.definitions.forEach(d => { html += `<li>${d}</li>`; });
+      html += '</ul>';
+      if (m.synonyms.length) html += `<p><small>Synonyms: ${m.synonyms.join(', ')}</small></p>`;
+    });
+    this._showModal('Dictionary', html);
+  },
+
+  async lookupThesaurus() {
+    const word = window.getSelection().toString().trim();
+    if (!word) { this.toast('Select a word first'); return; }
+    const result = await Writing.lookupWord(word);
+    if (!result) { this.toast(`No thesaurus entry for "${word}"`); return; }
+    const synonyms = new Set();
+    result.meanings.forEach(m => m.synonyms.forEach(s => synonyms.add(s)));
+    let html = `<h3>Thesaurus: ${word}</h3><ul>`;
+    synonyms.forEach(s => { html += `<li>${s}</li>`; });
+    html += '</ul>';
+    this._showModal('Thesaurus', html);
+  },
+
+  // ── Library ────────────────────────────────────────────────
+  async _loadLibrary() {
+    const docs = await OSDB.listDocuments();
+    const grid = document.getElementById('docGrid');
+    if (!docs.length) {
+      grid.innerHTML = '<div class="empty-state"><h3>No documents yet</h3>Import one to get started.</div>';
+      return;
+    }
+    grid.innerHTML = docs.map(d => `
+      <div class="doc-card" onclick="App.openDocument('${d.id}')">
+        <h3>${this._escapeHtml(d.title)}</h3>
+        <div class="meta">${d.sourceFormat?.toUpperCase() || 'TXT'} · ${d.pages?.length || 1} pages</div>
+        <div class="meta">${new Date(d.updatedAt).toLocaleDateString()}</div>
+        <button class="btn btn-sm btn-danger" style="margin-top:6px" onclick="event.stopPropagation();App.deleteDoc('${d.id}')">🗑</button>
+      </div>
+    `).join('');
+  },
+
+  async openDocument(id) {
+    const doc = await OSDB.getDocument(id);
+    if (!doc) { this.toast('Document not found', 'error'); return; }
+    await Reader.loadDocument(doc);
+    this.switchToReader();
+    this._updatePageNav();
+  },
+
+  async deleteDoc(id) {
+    if (!confirm('Delete this document?')) return;
+    await OSDB.deleteDocument(id);
+    this.toast('Deleted');
+    this._loadLibrary();
+  },
+
+  filterLibrary() {
+    const query = document.getElementById('librarySearch').value.toLowerCase();
+    const cards = document.querySelectorAll('.doc-card');
+    cards.forEach(c => {
+      const title = c.querySelector('h3').textContent.toLowerCase();
+      c.style.display = title.includes(query) ? '' : 'none';
+    });
+  },
+
+  // ── Drop Zone ──────────────────────────────────────────────
+  _initDropZone() {
+    const zone = document.getElementById('dropZone');
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) {
+        document.getElementById('fileInput').files = e.dataTransfer.files;
+        this.handleFile({ target: { files: e.dataTransfer.files } });
+      }
+    });
+  },
+
+  // ── Callbacks ──────────────────────────────────────────────
+  _wireCallbacks() {
+    Reader.onVoicesChanged = () => this._populateVoices();
+    Reader.onStateChange = (playing, paused) => this._updateReaderUI(playing, paused);
+    Reader.onWordChange = (idx) => {
+      if (idx >= 0) document.getElementById('positionInfo').textContent = `Word ${idx + 1} of ${Reader.STATE.words.length}`;
+    };
+    Reader.onPageChange = (page) => this._updatePageNav();
+    Writing.onDraftsChanged = () => this._refreshDraftList();
+    Writing.onDraftSelected = (draft) => {
+      document.getElementById('editorArea').innerHTML = draft.content;
+    };
+
+    // Text input: Ctrl+Enter to load
+    document.getElementById('textInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) {
+        e.preventDefault();
+        this._loadFromText();
+      }
+    });
+  },
+
+  _updateReaderUI(playing, paused) {
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot';
+    document.getElementById('btnPlay').disabled = playing && !paused;
+    document.getElementById('btnPause').disabled = !playing || paused;
+    document.getElementById('btnStop').disabled = !playing && !paused;
+    document.getElementById('btnBack').disabled = !playing && !paused;
+    document.getElementById('btnFwd').disabled = !playing && !paused;
+
+    if (playing && !paused) {
+      dot.classList.add('playing');
+      document.getElementById('statusLabel').textContent = 'Playing';
+    } else if (paused) {
+      dot.classList.add('paused');
+      document.getElementById('statusLabel').textContent = 'Paused';
+    } else {
+      document.getElementById('statusLabel').textContent = 'Ready';
+      document.getElementById('positionInfo').textContent = '';
+    }
+  },
+
+  _updatePageNav() {
+    if (Reader.STATE.totalPages > 1) {
+      document.getElementById('pageNav').style.display = 'flex';
+      document.getElementById('pageInfo').textContent = `Page ${Reader.STATE.currentPage + 1} of ${Reader.STATE.totalPages}`;
+    } else {
+      document.getElementById('pageNav').style.display = 'none';
+    }
+  },
+
+  // ── Modal ─────────────────────────────────────────────────
+  _showModal(title, content) {
+    document.getElementById('modalContent').innerHTML = `<h2>${title}</h2>${content}
+      <div class="modal-actions"><button class="btn btn-sm btn-primary" onclick="App._closeModal()">Close</button></div>`;
+    document.getElementById('modalOverlay').classList.add('active');
+  },
+  _closeModal() { document.getElementById('modalOverlay').classList.remove('active'); },
+
+  // ── Toast ─────────────────────────────────────────────────
+  toast(msg, type = '') {
+    const container = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => { el.remove(); }, 3000);
+  },
+
+  // ── Utilities ──────────────────────────────────────────────
+  _escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  },
+
+  _downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    a.click(); URL.revokeObjectURL(url);
+  },
+};
+
+// ── Startup ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => App.init());
+
+// Handle text input: typing -> render to viewer
+document.getElementById('textInput')?.addEventListener('input', function() {
+  const text = this.value;
+  if (Reader.STATE.documentId && text.length) {
+    // Don't auto-load while typing — wait for Ctrl+Enter
+  }
+});
+
+// Install PWA prompt
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+});
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
